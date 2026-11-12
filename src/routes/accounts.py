@@ -76,7 +76,8 @@ router = APIRouter()
 async def register_user(
         user_data: UserRegistrationRequestSchema,
         db: AsyncSession = Depends(get_db),
-        email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator)
+        email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator),
+        settings: BaseAppSettings = Depends(get_settings),
 ) -> UserRegistrationResponseSchema:
     """
     Endpoint for user registration.
@@ -137,7 +138,7 @@ async def register_user(
             detail="An error occurred during user creation."
         ) from e
     else:
-        activation_link = "http://127.0.0.1/accounts/activate/"
+        activation_link = f"{settings.APP_BASE_URL}/api/v1/accounts/activate/?email={new_user.email}&token={activation_token.token}"
 
         await email_sender.send_activation_email(
             new_user.email,
@@ -181,6 +182,7 @@ async def activate_account(
         activation_data: UserActivationRequestSchema,
         db: AsyncSession = Depends(get_db),
         email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator),
+        settings: BaseAppSettings = Depends(get_settings),
 ) -> MessageResponseSchema:
     """
     Endpoint to activate a user's account.
@@ -236,7 +238,7 @@ async def activate_account(
     await db.delete(token_record)
     await db.commit()
 
-    login_link = "http://127.0.0.1/accounts/login/"
+    login_link = f"{settings.APP_BASE_URL}/docs"
 
     await email_sender.send_activation_complete_email(
         str(activation_data.email),
@@ -244,6 +246,21 @@ async def activate_account(
     )
 
     return MessageResponseSchema(message="User account activated successfully.")
+
+
+@router.get(
+    "/activate/",
+    response_model=MessageResponseSchema
+)
+async def activate(
+        email: str,
+        token: str,
+        db: AsyncSession = Depends(get_db),
+        email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator),
+        settings: BaseAppSettings = Depends(get_settings),
+):
+    user_data = UserActivationRequestSchema(email=email, token=token)
+    return await activate_account(user_data, db, email_sender, settings)
 
 
 @router.post(
@@ -259,7 +276,8 @@ async def activate_account(
 async def request_password_reset_token(
         data: PasswordResetRequestSchema,
         db: AsyncSession = Depends(get_db),
-        email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator)
+        email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator),
+        settings: BaseAppSettings = Depends(get_settings),
 ) -> MessageResponseSchema:
     """
     Endpoint to request a password reset token.
@@ -290,7 +308,10 @@ async def request_password_reset_token(
     db.add(reset_token)
     await db.commit()
 
-    password_reset_complete_link = "http://127.0.0.1/accounts/password-reset-complete/"
+    password_reset_complete_link = (
+        f"{settings.APP_BASE_URL}/api/v1/accounts/reset-password/complete/"
+        f"?email={user.email}&token={reset_token.token}"
+    )
 
     await email_sender.send_password_reset_email(
         str(data.email),
