@@ -138,7 +138,8 @@ async def register_user(
             detail="An error occurred during user creation."
         ) from e
     else:
-        activation_link = f"{settings.APP_BASE_URL}/api/v1/accounts/activate/?email={new_user.email}&token={activation_token.token}"
+        activation_link = (f"{settings.APP_BASE_URL}/api/v1/accounts/activate/"
+                           f"?email={new_user.email}&token={activation_token.token}")
 
         await email_sender.send_activation_email(
             new_user.email,
